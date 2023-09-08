@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Sync ArgoCD Application
-        uses: cheelim1/argocd-actions@v0.1.13-alpha
+        uses: cheelim1/argocd-actions@v0.1.15-alpha
         with:
           address: "argocd.example.com"
           token: ${{ secrets.ARGOCD_TOKEN }}
@@ -29,7 +29,7 @@ jobs:
           application: "my-example-app"
 ```
 
-### Inputs
+## Inputs
 
 | Input     | Description                            |
 |-----------|----------------------------------------|
@@ -38,8 +38,9 @@ jobs:
 | `action`  | ArgoCD Action i.e. sync.               |
 | `application` | Application name to execute action on. [Optional] |
 | `labels` | ArgoCD app to sync based on labels. [Optional] |
-**Note** 
-Have to either pass in application OR labels. 1 is required.
+
+### Note
+Have to either pass in application OR labels. Either 1 is required.
 
 ## Examples
 
@@ -56,7 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Sync ArgoCD Application
-        uses: cheelim1/argocd-actions@v0.1.13-alpha
+        uses: cheelim1/argocd-actions@v0.1.15-alpha
         with:
           address: "argocd.example.com"
           token: ${{ secrets.ARGOCD_TOKEN }}
@@ -74,7 +75,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Sync ArgoCD Application
-        uses: cheelim1/argocd-actions@v0.1.13-alpha
+        uses: cheelim1/argocd-actions@v0.1.15-alpha
         with:
           address: "argocd.example.com"
           token: ${{ secrets.ARGOCD_TOKEN }}
