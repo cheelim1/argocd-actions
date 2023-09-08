@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"strings"
 	"time"
 
@@ -19,9 +18,10 @@ import (
 
 const (
     maxRetries       = 5
-    baseDelay  = 2 // Base delay in seconds for exponential backoff
+    baseDelay        = 2 // Base delay in seconds for exponential backoff
     maxConcurrentOps = 10  // Maximum number of concurrent sync operations
     initialBackoff   = 100 // Initial backoff interval in milliseconds
+    postSyncDelay    = 15 * time.Second  // Delay for 15 seconds after sync
 )
 
 // Interface is an interface for API.
@@ -158,19 +158,33 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
             err := a.Sync(app.Name)
             if err != nil {
                 if isTransientError(err) {
-                    // Exponential backoff with jitter
-                    delay := time.Second * time.Duration((baseDelay^retries) + rand.Intn(baseDelay))
-                    log.Warnf("Transient error syncing app %s. Attempt %d/%d. Retrying in %v seconds...", app.Name, retries+1, maxRetries, delay.Seconds())
-                    time.Sleep(delay)
+                    // Handle transient errors with exponential backoff
+                    time.Sleep(time.Second * time.Duration(2^retries))
                     retries++
                     continue
                 }
                 syncErrors = append(syncErrors, fmt.Sprintf("Error syncing %s: %v", app.Name, err))
                 break
-            } else {
+            }
+
+            // Introduce a post-sync delay
+            time.Sleep(postSyncDelay)
+
+            // Check for differences after sync
+            hasDiff, err := a.HasDifferences(app.Name)
+            if err != nil {
+                syncErrors = append(syncErrors, fmt.Sprintf("Error checking differences for %s: %v", app.Name, err))
+                break
+            }
+
+            if !hasDiff {
                 log.Infof("Synced app %s based on labels", app.Name)
                 syncedApps = append(syncedApps, &app)
                 break
+            } else {
+                log.Warnf("Differences still found after sync for app %s. Retrying...", app.Name)
+                retries++
+                time.Sleep(10 * time.Second) // Wait before retrying
             }
         }
     }
