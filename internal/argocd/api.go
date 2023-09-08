@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	argocdclient "github.com/argoproj/argo-cd/v2/pkg/apiclient"
@@ -16,7 +18,11 @@ import (
 	argoio "github.com/argoproj/argo-cd/v2/util/io"
 )
 
-const maxRetries = 5
+const (
+    maxRetries       = 5
+    maxConcurrentOps = 10  // Maximum number of concurrent sync operations
+    initialBackoff   = 100 // Initial backoff interval in milliseconds
+)
 
 // Interface is an interface for API.
 type Interface interface {
@@ -63,42 +69,41 @@ func (a API) Refresh(appName string) error {
 
 // Sync syncs given application.
 func (a API) Sync(appName string) error {
-    maxRetries := 5
-
     for i := 0; i < maxRetries; i++ {
-        // Refresh the application to detect latest changes
-        err := a.Refresh(appName)
-        if err != nil {
-            return err
+        if err := a.RefreshAndSync(appName); err != nil {
+            log.Warnf("Error syncing app %s. Attempt %d/%d. Retrying...", appName, i+1, maxRetries)
+            // Exponential backoff with jitter
+            backoff := time.Duration(initialBackoff*math.Pow(2, float64(i))) * time.Millisecond
+            jitter := time.Duration(rand.Intn(100)) * time.Millisecond
+            time.Sleep(backoff + jitter)
+            continue
         }
+        return nil
+    }
+    return fmt.Errorf("Failed to sync app %s after %d attempts", appName, maxRetries)
+}
 
-        // Sync the application
-        request := applicationpkg.ApplicationSyncRequest{
-            Name:  &appName,
-            Prune: true,
-        }
-
-        _, err = a.client.Sync(context.Background(), &request)
-        if err != nil {
-            return err
-        }
-
-        // Check if there's any diff
-        app, err := a.client.Get(context.Background(), &applicationpkg.ApplicationQuery{Name: &appName})
-        if err != nil {
-            return err
-        }
-
-        // If the application is synced (no diff), break out of the loop
-        if app.Status.Sync.Status == v1alpha1.SyncStatusCodeSynced {
-            break
-        }
-
-        // If not, wait for a short duration before retrying
-        time.Sleep(10 * time.Second)
+func (a API) RefreshAndSync(appName string) error {
+    if err := a.Refresh(appName); err != nil {
+        return err
     }
 
-    return nil
+    hasDiff, err := a.HasDifferences(appName)
+    if err != nil {
+        return err
+    }
+
+    if !hasDiff {
+        log.Infof("No differences found for app %s. Skipping sync.", appName)
+        return nil
+    }
+
+    request := applicationpkg.ApplicationSyncRequest{
+        Name:  &appName,
+        Prune: false, //Disable prune
+    }
+    _, err = a.client.Sync(context.Background(), &request)
+    return err
 }
 
 // Introduce a retry mechanism with exponential backoff
@@ -129,28 +134,32 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
 
     var syncedApps []*v1alpha1.Application
     var syncErrors []string
+    var syncErrorsMutex sync.Mutex // Mutex to protect concurrent writes to syncErrors
 
-    // 2. Sync each application
+    var wg sync.WaitGroup
+    sem := make(chan struct{}, maxConcurrentOps) // Semaphore for concurrency control
+
+    // 2. Sync each application in parallel
     for _, app := range listResponse.Items {
-        retries := 0
-        for retries < maxRetries {
-            err := a.Sync(app.Name)
-            if err != nil {
-                if strings.Contains(err.Error(), "too_many_pings") {
-                    // Exponential backoff
-                    time.Sleep(time.Second * time.Duration(2^retries))
-                    retries++
-                    continue
-                }
+        wg.Add(1)
+        go func(app v1alpha1.Application) {
+            defer wg.Done()
+            sem <- struct{}{} // Acquire
+            defer func() { <-sem }() // Release
+
+            if err := a.Sync(app.Name); err != nil {
+                syncErrorsMutex.Lock()
                 syncErrors = append(syncErrors, fmt.Sprintf("Error syncing %s: %v", app.Name, err))
-                break
+                syncErrorsMutex.Unlock()
             } else {
                 log.Infof("Synced app %s based on labels", app.Name)
+                // Note: This operation is thread-safe for slices as long as only one goroutine writes to a particular index
                 syncedApps = append(syncedApps, &app)
-                break
             }
-        }
+        }(app)
     }
+
+    wg.Wait() // Wait for all goroutines to finish
 
     // Close the gRPC connection after all sync operations are complete
     defer argoio.Close(a.connection)
