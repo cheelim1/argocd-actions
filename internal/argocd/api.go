@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 
 const (
     maxRetries       = 5
+    baseDelay  = 2 // Base delay in seconds for exponential backoff
     maxConcurrentOps = 10  // Maximum number of concurrent sync operations
     initialBackoff   = 100 // Initial backoff interval in milliseconds
 )
@@ -149,48 +151,28 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
     var syncedApps []*v1alpha1.Application
     var syncErrors []string
 
-    refreshPollInterval := 5 * time.Second  // Interval to check sync status after refresh
-    maxRefreshPolls := 10  // Maximum number of times to poll sync status after refresh
-
-    // 2. Refresh and sync each application
+    // 2. Sync each application
     for _, app := range listResponse.Items {
-        // Refresh the application
-        err := a.Refresh(app.Name)
-        if err != nil {
-            syncErrors = append(syncErrors, fmt.Sprintf("Error refreshing %s: %v", app.Name, err))
-            continue
-        }
-
-        // Poll the sync status after refresh
-        isOutOfSync := false
-        for j := 0; j < maxRefreshPolls; j++ {
-            hasDiff, err := a.HasDifferences(app.Name)
+        retries := 0
+        for retries < maxRetries {
+            err := a.Sync(app.Name)
             if err != nil {
-                syncErrors = append(syncErrors, fmt.Sprintf("Error checking differences for %s: %v", app.Name, err))
+                if isTransientError(err) {
+                    // Exponential backoff with jitter
+                    delay := time.Second * time.Duration((baseDelay^retries) + rand.Intn(baseDelay))
+                    log.Warnf("Transient error syncing app %s. Attempt %d/%d. Retrying in %v seconds...", app.Name, retries+1, maxRetries, delay.Seconds())
+                    time.Sleep(delay)
+                    retries++
+                    continue
+                }
+                syncErrors = append(syncErrors, fmt.Sprintf("Error syncing %s: %v", app.Name, err))
+                break
+            } else {
+                log.Infof("Synced app %s based on labels", app.Name)
+                syncedApps = append(syncedApps, &app)
                 break
             }
-            if hasDiff {
-                isOutOfSync = true
-                break
-            }
-            time.Sleep(refreshPollInterval)
         }
-
-        // If there's no difference after polling, skip the sync for this application
-        if !isOutOfSync {
-            log.Infof("No differences found for app %s after polling. Skipping sync.", app.Name)
-            continue
-        }
-
-        // Sync the application
-        err = a.Sync(app.Name)
-        if err != nil {
-            syncErrors = append(syncErrors, fmt.Sprintf("Error syncing %s: %v", app.Name, err))
-            continue
-        }
-
-        log.Infof("Successfully synced app %s based on labels", app.Name)
-        syncedApps = append(syncedApps, &app)
     }
 
     // Close the gRPC connection after all sync operations are complete
@@ -207,6 +189,12 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
     }
 
     return syncedApps, nil
+}
+
+// Helper function to determine if an error is transient and should be retried
+func isTransientError(err error) bool {
+    errMsg := err.Error()
+    return strings.Contains(errMsg, "ENHANCE_YOUR_CALM") || strings.Contains(errMsg, "too_many_pings")
 }
 
 func matchesLabels(app *v1alpha1.Application, labelsStr string) bool {
