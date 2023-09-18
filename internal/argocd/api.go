@@ -86,9 +86,9 @@ func (a API) GetApplicationWithRetry(appName string, refreshType string) (*v1alp
 
 // Sync syncs given application.
 func (a API) Sync(appName string) error {
-    maxRetries := 3
-    refreshPollInterval := 3 * time.Second  // Interval to check sync status after refresh
-    maxRefreshPolls := 7  // Maximum number of times to poll sync status after refresh, 7 polls at 3-second intervals = 21 seconds
+    maxRetries := 5
+    refreshPollInterval := 5 * time.Second  // Interval to check sync status after refresh
+    maxRefreshPolls := 10  // Maximum number of times to poll sync status after refresh, 12 polls at 5-second intervals = 60 seconds
 
     for i := 0; i < maxRetries; i++ {
         // Step 1: Refresh the application to detect latest changes
@@ -137,6 +137,20 @@ func (a API) Sync(appName string) error {
     }
 
     return fmt.Errorf("Failed to sync app %s after %d attempts", appName, maxRetries)
+}
+
+// Introduce a retry mechanism with exponential backoff
+func (a API) SyncWithRetry(appName string) error {
+    var err error
+    for i := 0; i < maxRetries; i++ {
+        err = a.Sync(appName)
+        if err == nil {
+            return nil
+        }
+        // Exponential backoff: 2^i * 100ms. For i=0,1,2,... this results in 100ms, 200ms, 400ms, ...
+        time.Sleep(time.Duration(math.Pow(2, float64(i))) * 100 * time.Millisecond)
+    }
+    return err
 }
 
 // SyncWithLabels syncs applications based on provided labels.
@@ -195,11 +209,6 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
     // Close the gRPC connection after all sync operations are complete
     defer argoio.Close(a.connection)
 
-    // Check if no applications were synced based on labels
-    if len(syncedApps) == 0 {
-        return nil, fmt.Errorf("No applications found with matching labels: %s", labels)
-    }
-
     // Return errors if any
     if len(syncErrors) > 0 {
         return syncedApps, fmt.Errorf(strings.Join(syncErrors, "; "))
@@ -210,19 +219,66 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
 
 // Helper function to determine if an error is transient and should be retried
 func isTransientError(err error) bool {
-	errMsg := err.Error()
-	transientErrors := []string{
-		"ENHANCE_YOUR_CALM",
-		"too_many_pings",
-		"error reading from server: EOF",
-		"code = Unavailable desc = closing transport due to",
-	}
-	for _, transientError := range transientErrors {
-		if strings.Contains(errMsg, transientError) {
-			return true
-		}
-	}
-	return false
+    errMsg := err.Error()
+    return strings.Contains(errMsg, "ENHANCE_YOUR_CALM") || strings.Contains(errMsg, "too_many_pings")
+}
+
+func matchesLabels(app *v1alpha1.Application, labelsStr string) bool {
+    pairs := strings.Split(labelsStr, ",")
+    appLabels := app.ObjectMeta.Labels
+
+    for _, pair := range pairs {
+        // Handle negative matches
+        if strings.Contains(pair, "!=") {
+            keyValue := strings.Split(pair, "!=")
+            if len(keyValue) != 2 {
+                // Malformed label string
+                continue
+            }
+            key, value := keyValue[0], keyValue[1]
+            if appLabels[key] == value {
+                return false
+            }
+        } else if strings.Contains(pair, "=") {
+            keyValue := strings.Split(pair, "=")
+            if len(keyValue) != 2 {
+                // Malformed label string
+                continue
+            }
+            key, value := keyValue[0], keyValue[1]
+            if appLabels[key] != value {
+                return false
+            }
+        } else if strings.Contains(pair, "notin") {
+            parts := strings.Split(pair, "notin")
+            if len(parts) != 2 {
+                continue // or handle error
+            }
+            
+            key := strings.TrimSpace(parts[0])
+            valueStr := strings.TrimSpace(parts[1])
+            
+            // Trim brackets and split by comma
+            values := strings.Split(strings.Trim(valueStr, "()"), ",")
+            
+            for _, v := range values {
+                if appLabels[key] == strings.TrimSpace(v) {
+                    return false
+                }
+            }
+        } else if strings.HasPrefix(pair, "!") {
+            key := strings.TrimPrefix(pair, "!")
+            if _, exists := appLabels[key]; exists {
+                return false
+            }
+        } else {
+            // Existence checks
+            if _, exists := appLabels[pair]; !exists {
+                return false
+            }
+        }
+    }
+    return true
 }
 
 // HasDifferences checks if the given application has differences between the desired and live state.
