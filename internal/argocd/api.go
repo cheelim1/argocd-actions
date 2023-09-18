@@ -210,8 +210,19 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
 
 // Helper function to determine if an error is transient and should be retried
 func isTransientError(err error) bool {
-    errMsg := err.Error()
-    return strings.Contains(errMsg, "ENHANCE_YOUR_CALM") || strings.Contains(errMsg, "too_many_pings")
+	errMsg := err.Error()
+	transientErrors := []string{
+		"ENHANCE_YOUR_CALM",
+		"too_many_pings",
+		"error reading from server: EOF",
+		"code = Unavailable desc = closing transport due to",
+	}
+	for _, transientError := range transientErrors {
+		if strings.Contains(errMsg, transientError) {
+			return true
+		}
+	}
+	return false
 }
 
 // HasDifferences checks if the given application has differences between the desired and live state.
