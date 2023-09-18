@@ -139,30 +139,40 @@ func (a API) Sync(appName string) error {
     return fmt.Errorf("Failed to sync app %s after %d attempts", appName, maxRetries)
 }
 
-// Introduce a retry mechanism with exponential backoff
-func (a API) SyncWithRetry(appName string) error {
-    var err error
-    for i := 0; i < maxRetries; i++ {
-        err = a.Sync(appName)
-        if err == nil {
-            return nil
-        }
-        // Exponential backoff: 2^i * 100ms. For i=0,1,2,... this results in 100ms, 200ms, 400ms, ...
-        time.Sleep(time.Duration(math.Pow(2, float64(i))) * 100 * time.Millisecond)
-    }
-    return err
-}
-
 // SyncWithLabels syncs applications based on provided labels.
 func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
-    // 1. Fetch applications based on labels
-    query := &applicationpkg.ApplicationQuery{
+     // 1. Fetch applications based on labels
+     query := &applicationpkg.ApplicationQuery{
         Selector: labels,
     }
     listResponse, err := a.client.List(context.Background(), query)
-    if err != nil {
-        argoio.Close(a.connection)  // Close the connection here if there's an error
-        return nil, err
+
+    // Retry mechanism for fetching applications based on labels
+    fetchRetries := 5
+    fetchRetryDelay := 10 * time.Second
+    for i := 0; i < fetchRetries; i++ {
+        listResponse, err = a.client.List(context.Background(), &applicationpkg.ApplicationQuery{
+            Selector: labels,
+        })
+        if err != nil {
+            argoio.Close(a.connection)  // Close the connection here if there's an error
+            return nil, err
+        }
+
+        if len(listResponse.Items) > 0 {
+            break
+        }
+
+        // If no applications are found, retry after a delay
+        if i < fetchRetries-1 {  // Don't sleep after the last retry
+            log.Warnf("No applications found for labels: %s. Retrying in %v...", labels, fetchRetryDelay)
+            time.Sleep(fetchRetryDelay)
+        }
+    }
+
+    if len(listResponse.Items) == 0 {
+        log.Errorf("No applications found for labels: %s after %d retries", labels, fetchRetries)
+        return nil, fmt.Errorf("No applications found for labels: %s after %d retries", labels, fetchRetries)
     }
 
     var syncedApps []*v1alpha1.Application
