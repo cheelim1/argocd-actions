@@ -25,6 +25,12 @@ const (
     appQueryRetryDelay = 5 * time.Second
 )
 
+// Interface is an interface for API.
+type Interface interface {
+    Sync(appName string) error
+    SyncWithLabels(labels string) ([]*v1alpha1.Application, error)
+}
+
 // API is struct for ArgoCD api.
 type API struct {
 	client     applicationpkg.ApplicationServiceClient
