@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"strings"
-	"sync"
 	"time"
 
 	argocdclient "github.com/argoproj/argo-cd/v2/pkg/apiclient"
@@ -24,7 +22,6 @@ const (
     postSyncDelay    = 15 * time.Second  // Delay for 15 seconds after sync
     appQueryMaxRetries = 5
     appQueryRetryDelay = 5 * time.Second
-    maxConcurrentSyncs  = 5 // Adjust this based on your needs
 )
 
 // Interface is an interface for API.
@@ -157,104 +154,64 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
     var syncedApps []*v1alpha1.Application
     var syncErrors []string
 
-    // Use a channel to collect sync errors
-    errorsCh := make(chan string, len(listResponse.Items))
-    // Use a wait group to wait for all goroutines to finish
-    var wg sync.WaitGroup
-    // Semaphore for limiting concurrent sync operations
-	sem := make(chan struct{}, maxConcurrentSyncs)
+    // 2. Sync each application
+    for _, app := range listResponse.Items {
+        retries := 0
+        for retries < maxRetries {
+            err := a.Sync(app.Name)
+            if err != nil {
+                if isTransientError(err) {
+                    // Handle transient errors with exponential backoff
+                    time.Sleep(time.Duration(math.Pow(2, float64(retries))) * time.Millisecond * initialBackoff)
+                    retries++
+                    continue
+                }
+                syncErrors = append(syncErrors, fmt.Sprintf("Error syncing %s: %v", app.Name, err))
+                break
+            }
 
-	// 2. Sync each application in parallel
-	for _, app := range listResponse.Items {
-		wg.Add(1)
-		sem <- struct{}{} // Acquire a token
-		go func(app v1alpha1.Application) {
-			defer func() {
-				<-sem // Release the token
-				wg.Done()
-			}()
-			retries := 0
-			for retries < maxRetries {
-				err := a.Sync(app.Name)
-				if err != nil {
-					if isTransientError(err) {
-						// Handle transient errors with exponential backoff with jitter
-						time.Sleep(exponentialBackoffWithJitter(initialBackoff, retries))
-						retries++
-						continue
-					}
-					errorsCh <- fmt.Sprintf("Error syncing %s: %v", app.Name, err)
-					return
-				}
+            // Introduce a post-sync delay
+            time.Sleep(postSyncDelay)
 
-				// Introduce a post-sync delay
-				time.Sleep(postSyncDelay)
+            // Check for differences after sync
+            hasDiff, err := a.HasDifferences(app.Name)
+            if err != nil {
+                syncErrors = append(syncErrors, fmt.Sprintf("Error checking differences for %s: %v", app.Name, err))
+                break
+            }
 
-				// Check for differences after sync
-				hasDiff, err := a.HasDifferences(app.Name)
-				if err != nil {
-					errorsCh <- fmt.Sprintf("Error checking differences for %s: %v", app.Name, err)
-					return
-				}
+            if !hasDiff {
+                log.Infof("Synced app %s based on labels", app.Name)
+                syncedApps = append(syncedApps, &app)
+                break
+            } else {
+                log.Warnf("Differences still found after sync for app %s. Retrying...", app.Name)
+                retries++
+                time.Sleep(10 * time.Second) // Wait before retrying
+            }
+        }
+    }
 
-				if !hasDiff {
-					log.Infof("Synced app %s based on labels", app.Name)
-					syncedApps = append(syncedApps, &app)
-					return
-				} else {
-					log.Warnf("Differences still found after sync for app %s. Retrying...", app.Name)
-					retries++
-					time.Sleep(5 * time.Second) // Reduced from 10 seconds
-				}
-			}
-		}(app)
-	}
+    // Close the gRPC connection after all sync operations are complete
+    defer argoio.Close(a.connection)
 
-	// Wait for all goroutines to finish
-	wg.Wait()
-	close(errorsCh)
+    // Check if no applications were synced based on labels
+    if len(syncedApps) == 0 {
+        return nil, fmt.Errorf("No applications found with matching labels: %s", labels)
+    }
 
-	// Collect errors from the channel
-	for err := range errorsCh {
-		syncErrors = append(syncErrors, err)
-	}
+    // Return errors if any
+    if len(syncErrors) > 0 {
+        return syncedApps, fmt.Errorf(strings.Join(syncErrors, "; "))
+    }
 
-	// Close the gRPC connection after all sync operations are complete
-	defer argoio.Close(a.connection)
-
-	// Check if no applications were synced based on labels
-	if len(syncedApps) == 0 {
-		return nil, fmt.Errorf("No applications found with matching labels: %s", labels)
-	}
-
-	// Return errors if any
-	if len(syncErrors) > 0 {
-		return syncedApps, fmt.Errorf(strings.Join(syncErrors, "; "))
-	}
-
-	return syncedApps, nil
-}
-
-func exponentialBackoffWithJitter(baseDelay time.Duration, retries int) time.Duration {
-	jitter := time.Duration(rand.Int63n(int64(baseDelay)))
-	return time.Duration(math.Pow(2, float64(retries))) * baseDelay + jitter
+    return syncedApps, nil
 }
 
 // Helper function to determine if an error is transient and should be retried
 func isTransientError(err error) bool {
-	errMsg := err.Error()
-	transientErrors := []string{
-		"ENHANCE_YOUR_CALM",
-		"too_many_pings",
-		"error reading from server: EOF",
-		"code = Unavailable desc = closing transport due to",
-	}
-	for _, transientError := range transientErrors {
-		if strings.Contains(errMsg, transientError) {
-			return true
-		}
-	}
-	return false
+    errMsg := err.Error()
+    return strings.Contains(errMsg, "ENHANCE_YOUR_CALM") || strings.Contains(errMsg, "too_many_pings")
 }
 
 // HasDifferences checks if the given application has differences between the desired and live state.
