@@ -22,6 +22,8 @@ const (
     maxConcurrentOps = 10  // Maximum number of concurrent sync operations
     initialBackoff   = 100 // Initial backoff interval in milliseconds
     postSyncDelay    = 15 * time.Second  // Delay for 15 seconds after sync
+    appQueryMaxRetries = 5
+    appQueryRetryDelay = 5 * time.Second
 )
 
 // Interface is an interface for API.
@@ -58,13 +60,30 @@ func NewAPI(options *APIOptions) API {
 func (a API) Refresh(appName string) error {
     refreshType := "normal" // or "hard" based on your preference
 
-    // Get the current application state with refresh
-    getRequest := applicationpkg.ApplicationQuery{
-        Name:    &appName,
-        Refresh: &refreshType,
+    // Get the current application state with refresh using retry mechanism
+    _, err := a.GetApplicationWithRetry(appName, refreshType)
+    if err != nil {
+        return fmt.Errorf("Error refreshing application %s: %v", appName, err)
     }
-    _, err := a.client.Get(context.Background(), &getRequest)
-    return err
+    return nil
+}
+
+
+func (a API) GetApplicationWithRetry(appName string, refreshType string) (*v1alpha1.Application, error) {
+    var appResponse *v1alpha1.Application
+    var err error
+    for i := 0; i < appQueryMaxRetries; i++ {
+        appResponse, err = a.client.Get(context.Background(), &applicationpkg.ApplicationQuery{
+            Name:    &appName,
+            Refresh: &refreshType,
+        })
+        if err == nil {
+            return appResponse, nil
+        }
+        log.Warnf("Error fetching application %s. Attempt %d/%d. Retrying in %v...", appName, i+1, appQueryMaxRetries, appQueryRetryDelay)
+        time.Sleep(appQueryRetryDelay)
+    }
+    return nil, fmt.Errorf("Failed to fetch application %s after %d attempts", appName, appQueryMaxRetries)
 }
 
 // Sync syncs given application.
@@ -159,7 +178,7 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
             if err != nil {
                 if isTransientError(err) {
                     // Handle transient errors with exponential backoff
-                    time.Sleep(time.Second * time.Duration(2^retries))
+                    time.Sleep(time.Duration(math.Pow(2, float64(retries))) * time.Millisecond * initialBackoff)
                     retries++
                     continue
                 }
@@ -271,10 +290,10 @@ func matchesLabels(app *v1alpha1.Application, labelsStr string) bool {
 
 // HasDifferences checks if the given application has differences between the desired and live state.
 func (a API) HasDifferences(appName string) (bool, error) {
-    // Get the application details
-    appResponse, err := a.client.Get(context.Background(), &applicationpkg.ApplicationQuery{
-        Name: &appName,
-    })
+    defaultRefreshType := "normal" // or "hard" based on your preference
+
+    // Get the application details with retries
+    appResponse, err := a.GetApplicationWithRetry(appName, defaultRefreshType)
     if err != nil {
         return false, fmt.Errorf("Error fetching application %s: %v", appName, err)
     }
