@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"errors"
-	"os"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -56,10 +55,8 @@ func Sync() *cobra.Command {
             return nil
         },
     }
-    
-    cmd.Flags().String("address", os.Getenv("INPUT_ADDRESS"), "ArgoCD server address")
-    cmd.Flags().String("token", os.Getenv("INPUT_TOKEN"), "ArgoCD token")
-    cmd.Flags().String("application", os.Getenv("INPUT_APPLICATION"), "ArgoCD application name")
-    cmd.Flags().String("labels", os.Getenv("INPUT_LABELS"), "Labels to sync the ArgoCD app with")  // Add the new flag for labels
+
+    cmd.Flags().String("application", "", "ArgoCD application name")
+    cmd.Flags().String("labels", "", "Labels to sync the ArgoCD app with")  // Add the new flag for labels
     return cmd
 }

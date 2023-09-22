@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"log"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -16,13 +15,13 @@ func Root() *cobra.Command {
 		SilenceUsage: true,
 	}
 
-	cmd.PersistentFlags().String("address", os.Getenv("INPUT_ADDRESS"), "ArgoCD address")
+	cmd.PersistentFlags().String("address", "", "ArgoCD address")
 
 	if err := cmd.MarkPersistentFlagRequired("address"); err != nil {
 		log.Fatalf("Lethal damage: %s\n\n", err)
 	}
 
-	cmd.PersistentFlags().String("token", os.Getenv("INPUT_TOKEN"), "ArgoCD token")
+	cmd.PersistentFlags().String("token", "", "ArgoCD token")
 
 	if err := cmd.MarkPersistentFlagRequired("token"); err != nil {
 		log.Fatalf("Lethal damage: %s\n\n", err)
