@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 	"strings"
 	"time"
 
@@ -45,14 +44,6 @@ type APIOptions struct {
 
 // NewAPI creates new API.
 func NewAPI(options *APIOptions) API {
-    if options.Address == "" {
-        options.Address = os.Getenv("INPUT_ADDRESS")
-    }
-    if options.Token == "" {
-        options.Token = os.Getenv("INPUT_TOKEN")
-    }
-    
-    
 	clientOptions := argocdclient.ClientOptions{
 		ServerAddr: options.Address,
 		AuthToken:  options.Token,
