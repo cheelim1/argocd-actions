@@ -80,7 +80,7 @@ func (a API) GetApplicationWithRetry(appName string, refreshType string) (*v1alp
 		log.Warnf("Error fetching application %s. Attempt %d/%d. Retrying in %v...", appName, i+1, appQueryMaxRetries, appQueryRetryDelay)
 		time.Sleep(appQueryRetryDelay)
 	}
-	return nil, fmt.Errorf("Failed to fetch application %s after %d attempts", appName, appQueryMaxRetries)
+	return nil, fmt.Errorf("failed to fetch application %s after %d attempts", appName, appQueryMaxRetries)
 }
 
 // Sync syncs given application.
@@ -171,7 +171,7 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
 
 	if len(listResponse.Items) == 0 {
 		log.Errorf("No applications found for labels: %s after %d retries", labels, fetchRetries)
-		return nil, fmt.Errorf("No applications found for labels: %s after %d retries", labels, fetchRetries)
+		return nil, fmt.Errorf("no applications found for labels: %s after %d retries", labels, fetchRetries)
 	}
 
 	var syncedApps []*v1alpha1.Application
@@ -250,7 +250,7 @@ func (a API) HasDifferences(appName string) (bool, error) {
 	// Get the application details with retries
 	appResponse, err := a.GetApplicationWithRetry(appName, defaultRefreshType)
 	if err != nil {
-		return false, fmt.Errorf("Error fetching application %s: %v", appName, err)
+		return false, fmt.Errorf("error fetching application %s: %v", appName, err)
 	}
 
 	// Check the application's sync status
