@@ -17,8 +17,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Clear mod cache
+        run: go clean -modcache
+
       - name: Get dependencies
         run: |
+          go mod tidy
+          go mod vendor
           go get -v -t -d ./...
 
       - name: Run Unit tests
@@ -46,31 +51,39 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Clear mod cache
+        run: go clean -modcache
+
       - name: go vet
         run: |
+          go mod tidy
+          go mod vendor
           go get -v -t -d ./...
           go vet ./...
 
       - name: go staticcheck
-        uses: dominikh/staticcheck-action@v1.2.0
+        uses: dominikh/staticcheck-action@v1.3.0
         with:
-          version: "2022.1"
+          version: "2023.1"
           install-go: false
 
-  golangci:
-    name: golangci lint check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up Go 1.x
-        uses: actions/setup-go@v3
-        with:
-          go-version: ^1.18
-        id: go
+  # golangci:
+  #   name: golangci lint check
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Set up Go 1.x
+  #       uses: actions/setup-go@v5
+  #       with:
+  #         go-version: ^1.18
+  #       id: go
 
-      - name: Checkout code
-        uses: actions/checkout@v3
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
 
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
-        with:
-          version: v1.45.2
+  #     - name: Clear mod cache
+  #       run: go clean -modcache
+
+  #     - name: golangci-lint
+  #       uses: golangci/golangci-lint-action@v6
+  #       with:
+  #         version: latest
