@@ -145,6 +145,9 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
 		Selector: labels,
 	}
 	listResponse, err := a.client.List(context.Background(), query)
+	if err != nil {
+		log.Errorf("Error fetching applications based on labels: %s", labels)
+	}
 
 	// Retry mechanism for fetching applications based on labels
 	fetchRetries := 5

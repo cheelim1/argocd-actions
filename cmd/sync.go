@@ -23,7 +23,7 @@ func Sync() *cobra.Command {
 
 			// Validation logic
 			if (application == "" && labels == "") || (application != "" && labels != "") {
-				return errors.New("You must specify either 'application' or 'labels', but not both")
+				return errors.New("you must specify either 'application' or 'labels', but not both")
 			}
 
 			api := argocd.NewAPI(&argocd.APIOptions{
