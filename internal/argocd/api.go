@@ -61,7 +61,7 @@ func (a API) Refresh(appName string) error {
 	// Get the current application state with refresh using retry mechanism
 	_, err := a.GetApplicationWithRetry(appName, refreshType)
 	if err != nil {
-		return fmt.Errorf("Error refreshing application %s: %v", appName, err)
+		return fmt.Errorf("error refreshing application %s: %v", appName, err)
 	}
 	return nil
 }
@@ -135,7 +135,7 @@ func (a API) Sync(appName string) error {
 		return nil
 	}
 
-	return fmt.Errorf("Failed to sync app %s after %d attempts", appName, maxRetries)
+	return fmt.Errorf("failed to sync app %s after %d attempts", appName, maxRetries)
 }
 
 // SyncWithLabels syncs applications based on provided labels.
