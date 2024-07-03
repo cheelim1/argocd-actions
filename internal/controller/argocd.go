@@ -25,5 +25,5 @@ func (c Controller) Sync(appName string) error {
 
 // SyncWithLabels syncs apps based on provided labels.
 func (c Controller) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
-    return c.API.SyncWithLabels(labels)
+	return c.API.SyncWithLabels(labels)
 }
