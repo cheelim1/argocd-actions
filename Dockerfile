@@ -25,4 +25,9 @@ FROM ${FROM_IMAGE}
 
 COPY --from=builder /app/dist/argocd-actions /bin/argocd-actions
 
+# Install AWS CLI
+RUN apk update && \
+  apk add --no-cache python3 py3-pip && \
+  pip install awscli
+
 ENTRYPOINT ["argocd-actions"]
