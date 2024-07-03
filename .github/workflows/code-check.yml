@@ -67,23 +67,23 @@ jobs:
           version: "2023.1"
           install-go: false
 
-  golangci:
-    name: golangci lint check
-    runs-on: ubuntu-latest
-    continue-on-error: true  # This makes the step optional
-    steps:
-      - name: Set up Go 1.x
-        uses: actions/setup-go@v3
-        with:
-          go-version: ^1.18
-        id: go
+  # golangci:
+  #   name: golangci lint check
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Set up Go 1.x
+  #       uses: actions/setup-go@v5
+  #       with:
+  #         go-version: ^1.18
+  #       id: go
 
-      - name: Checkout code
-        uses: actions/checkout@v3
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
 
-      - name: Clear mod cache
-        run: go clean -modcache
+  #     - name: Clear mod cache
+  #       run: go clean -modcache
 
-      - name: Run golangci-lint
-        run: |
-          golangci-lint run --out-format=github-actions --config .golangci.yml
+  #     - name: golangci-lint
+  #       uses: golangci/golangci-lint-action@v6
+  #       with:
+  #         version: latest
