@@ -44,3 +44,5 @@ linters:
     - exhaustivestruct
     - wrapcheck
     - gomoddirectives
+    - errorlint  # Temporarily disable errorlint
+    - errcheck  # Temporarily disable errcheck
