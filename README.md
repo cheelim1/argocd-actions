@@ -40,6 +40,8 @@ jobs:
 | `action`  | ArgoCD Action i.e. sync.               |
 | `application` | Application name to execute action on. [Optional] |
 | `labels` | ArgoCD app to sync based on labels. [Optional] |
+| `sync_retries` | ArgoCD app to sync retries (Default 5). [Optional] |
+| `sync_interval` | ArgoCD app to sync retry interval (Default 10s). [Optional] |
 
 ### Note
 Have to either pass in application OR labels. Either 1 is required.
@@ -65,6 +67,8 @@ jobs:
           token: ${{ secrets.ARGOCD_TOKEN }}
           action: sync
           application: "my-example-app"
+          sync_retries: "3" # Optional if you want to tweak the number of retries
+          sync_interval: "5s" # Optional if you want to tweak the retry sync interval
 ```
 
 ### Example syncing with labels

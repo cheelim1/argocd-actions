@@ -22,8 +22,16 @@ inputs:
     required: false
     default: "latest"
   labels:
-    description: 'Labels to sync the ArgoCD app'
+    description: "Labels to sync the ArgoCD app"
+    required: false    
+  sync_retries:
+    description: "Number of retry attempts if sync fails"
     required: false
+    default: "5"
+  sync_interval:
+    description: "Duration to wait between retries (e.g. '10s', '1m')"
+    required: false
+    default: "10s"
 
 runs:
   using: "composite"
@@ -36,5 +44,7 @@ runs:
           --labels=${{ inputs.labels }} \
           --token=${{ inputs.token }} \
           --address=${{ inputs.address }} \
+          --sync-retries=${{ inputs.sync_retries }} \
+          --sync-interval=${{ inputs.sync_interval }} \
           --logLevel=debug
       shell: sh

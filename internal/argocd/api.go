@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	maxRetries         = 5
-	initialBackoff     = 100              // Initial backoff interval in milliseconds
+	initialBackoff     = 100              // Initial backoff interval in ms, for transient error backoff
 	postSyncDelay      = 15 * time.Second // Delay for 15 seconds after sync
 	appQueryMaxRetries = 5
 	appQueryRetryDelay = 5 * time.Second
@@ -34,16 +33,27 @@ type Interface interface {
 type API struct {
 	client     applicationpkg.ApplicationServiceClient
 	connection io.Closer
+	options    *APIOptions
 }
 
 // APIOptions is options for API.
 type APIOptions struct {
-	Address string
-	Token   string
+	Address      string
+	Token        string
+	SyncRetries  int
+	SyncInterval time.Duration
 }
 
 // NewAPI creates new API.
 func NewAPI(options *APIOptions) API {
+	// Default value to fallback
+	if options.SyncRetries == 0 {
+		options.SyncRetries = 5
+	}
+	if options.SyncInterval == 0 {
+		options.SyncInterval = 10 * time.Second
+	}
+
 	clientOptions := argocdclient.ClientOptions{
 		ServerAddr: options.Address,
 		AuthToken:  options.Token,
@@ -52,7 +62,7 @@ func NewAPI(options *APIOptions) API {
 
 	connection, client := argocdclient.NewClientOrDie(&clientOptions).NewApplicationClientOrDie()
 
-	return API{client: client, connection: connection}
+	return API{client: client, connection: connection, options: options}
 }
 
 func (a API) Refresh(appName string) error {
@@ -85,7 +95,7 @@ func (a API) GetApplicationWithRetry(appName string, refreshType string) (*v1alp
 
 // Sync syncs given application.
 func (a API) Sync(appName string) error {
-	maxRetries := 5
+	maxRetries := a.options.SyncRetries
 	refreshPollInterval := 5 * time.Second // Interval to check sync status after refresh
 	maxRefreshPolls := 10                  // Maximum number of times to poll sync status after refresh, 12 polls at 5-second intervals = 60 seconds
 
@@ -99,9 +109,9 @@ func (a API) Sync(appName string) error {
 		// Poll the sync status after refresh
 		isOutOfSync := false
 		for j := 0; j < maxRefreshPolls; j++ {
-			hasDiff, err := a.HasDifferences(appName)
-			if err != nil {
-				return err
+			hasDiff, diffErr := a.HasDifferences(appName)
+			if diffErr != nil {
+				return diffErr
 			}
 			if hasDiff {
 				isOutOfSync = true
@@ -125,8 +135,8 @@ func (a API) Sync(appName string) error {
 		_, err = a.client.Sync(context.Background(), &request)
 		if err != nil {
 			// If there's an error, retry after a short delay
-			log.Warnf("Error syncing app %s. Attempt %d/%d. Retrying in 10 seconds...", appName, i+1, maxRetries)
-			time.Sleep(10 * time.Second)
+			log.Warnf("Error syncing app %s. Attempt %d/%d. Retrying in %v...", appName, i+1, maxRetries, a.options.SyncInterval)
+			time.Sleep(a.options.SyncInterval)
 			continue
 		}
 
@@ -135,7 +145,7 @@ func (a API) Sync(appName string) error {
 		return nil
 	}
 
-	return fmt.Errorf("failed to sync app %s after %d attempts", appName, maxRetries)
+	return fmt.Errorf("failed to sync app %s after %d attempts", appName, a.options.SyncRetries)
 }
 
 // SyncWithLabels syncs applications based on provided labels.
@@ -183,7 +193,7 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
 	// 2. Sync each application
 	for _, app := range listResponse.Items {
 		retries := 0
-		for retries < maxRetries {
+		for retries < a.options.SyncRetries {
 			err := a.Sync(app.Name)
 			if err != nil {
 				if isTransientError(err) {
@@ -200,9 +210,9 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
 			time.Sleep(postSyncDelay)
 
 			// Check for differences after sync
-			hasDiff, err := a.HasDifferences(app.Name)
-			if err != nil {
-				syncErrors = append(syncErrors, fmt.Sprintf("Error checking differences for %s: %v", app.Name, err))
+			hasDiff, diffErr := a.HasDifferences(app.Name)
+			if diffErr != nil {
+				syncErrors = append(syncErrors, fmt.Sprintf("Error checking differences for %s: %v", app.Name, diffErr))
 				break
 			}
 
@@ -213,7 +223,7 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
 			} else {
 				log.Warnf("Differences still found after sync for app %s. Retrying...", app.Name)
 				retries++
-				time.Sleep(10 * time.Second) // Wait before retrying
+				time.Sleep(a.options.SyncInterval) // Wait before retrying
 			}
 		}
 	}
@@ -231,6 +241,9 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
 
 // Helper function to determine if an error is transient and should be retried
 func isTransientError(err error) bool {
+	if err == nil {
+		return false
+	}
 	errMsg := err.Error()
 	transientErrors := []string{
 		"ENHANCE_YOUR_CALM",

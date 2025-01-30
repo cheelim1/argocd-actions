@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -20,6 +22,15 @@ func Sync() *cobra.Command {
 			token, _ := cmd.Flags().GetString("token")
 			application, _ := cmd.Flags().GetString("application")
 			labels, _ := cmd.Flags().GetString("labels")
+			syncRetries, _ := cmd.Flags().GetInt("sync-retries")
+			syncInterval, _ := cmd.Flags().GetDuration("sync-interval")
+
+			if syncRetries < 1 {
+				return fmt.Errorf("--sync-retries must be >= 1 (got %d)", syncRetries)
+			}
+			if syncInterval <= 0 {
+				return fmt.Errorf("--sync-interval must be > 0 (got %v)", syncInterval)
+			}
 
 			// Validation logic
 			if (application == "" && labels == "") || (application != "" && labels != "") {
@@ -27,8 +38,10 @@ func Sync() *cobra.Command {
 			}
 
 			api := argocd.NewAPI(&argocd.APIOptions{
-				Address: address,
-				Token:   token,
+				Address:      address,
+				Token:        token,
+				SyncRetries:  syncRetries,
+				SyncInterval: syncInterval,
 			})
 
 			controller := ctrl.NewController(api)
@@ -57,6 +70,8 @@ func Sync() *cobra.Command {
 	}
 
 	cmd.Flags().String("application", "", "ArgoCD application name")
-	cmd.Flags().String("labels", "", "Labels to sync the ArgoCD app with") // Add the new flag for labels
+	cmd.Flags().String("labels", "", "Labels to sync the ArgoCD app with")
+	cmd.Flags().Int("sync-retries", 5, "Number of retry attempts if sync fails")
+	cmd.Flags().Duration("sync-interval", 10*time.Second, "Time to wait between retries (e.g. '5s', '1m')")
 	return cmd
 }
