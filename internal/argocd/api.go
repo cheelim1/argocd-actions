@@ -264,7 +264,7 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
 
 	// Return errors if any
 	if len(syncErrors) > 0 {
-		return syncedApps, fmt.Errorf(strings.Join(syncErrors, "; "))
+		return syncedApps, fmt.Errorf("%s", strings.Join(syncErrors, "; "))
 	}
 
 	return syncedApps, nil
