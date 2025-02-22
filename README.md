@@ -6,7 +6,7 @@
 
 
 
-This action will sync ArgoCD application.
+This action can be used to sync ArgoCD applications using the application name or by labels.
 
 ## Usage
 
@@ -21,9 +21,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Sync ArgoCD Application
-        uses: cheelim1/argocd-actions@v0.1.1
+        uses: cheelim1/argocd-actions@v0.1.3
         with:
           address: "argocd.example.com"
           token: ${{ secrets.ARGOCD_TOKEN }}
@@ -59,9 +59,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Sync ArgoCD Application
-        uses: cheelim1/argocd-actions@v0.1.1
+        uses: cheelim1/argocd-actions@v0.1.3
         with:
           address: "argocd.example.com"
           token: ${{ secrets.ARGOCD_TOKEN }}
@@ -79,9 +79,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Sync ArgoCD Application
-        uses: cheelim1/argocd-actions@v0.1.1
+        uses: cheelim1/argocd-actions@v0.1.3
         with:
           address: "argocd.example.com"
           token: ${{ secrets.ARGOCD_TOKEN }}
