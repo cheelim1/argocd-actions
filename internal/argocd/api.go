@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog" // Go 1.21's standard library slog
+	"log/slog"
 	"math"
 	"strings"
 	"time"
@@ -25,18 +25,18 @@ const (
 
 // Interface is an interface for API.
 type Interface interface {
-	Sync(appName string) error
-	SyncWithLabels(labels string) ([]*v1alpha1.Application, error)
+	Sync(appName string, prune bool) error
+	SyncWithLabels(labels string, prune bool) ([]*v1alpha1.Application, error)
 }
 
-// API is struct for ArgoCD api.
+// API represents the ArgoCD API.
 type API struct {
 	client     applicationpkg.ApplicationServiceClient
 	connection io.Closer
 	options    *APIOptions
 }
 
-// APIOptions is options for API.
+// APIOptions holds API configuration options.
 type APIOptions struct {
 	Address      string
 	Token        string
@@ -44,7 +44,7 @@ type APIOptions struct {
 	SyncInterval time.Duration
 }
 
-// NewAPI creates new API.
+// NewAPI creates a new API instance.
 func NewAPI(options *APIOptions) API {
 	// Default value to fallback
 	if options.SyncRetries == 0 {
@@ -100,20 +100,20 @@ func (a API) GetApplicationWithRetry(appName string, refreshType string) (*v1alp
 	return nil, fmt.Errorf("failed to fetch application %s after %d attempts", appName, appQueryMaxRetries)
 }
 
-// Sync syncs given application.
-func (a API) Sync(appName string) error {
+// Sync syncs the given application with an optional prune flag.
+func (a API) Sync(appName string, prune bool) error {
 	maxRetries := a.options.SyncRetries
 	refreshPollInterval := 5 * time.Second // Interval to check sync status after refresh
 	maxRefreshPolls := 10                  // Maximum number of times to poll sync status after refresh, 12 polls at 5-second intervals = 60 seconds
 
 	for i := 0; i < maxRetries; i++ {
-		// Step 1: Refresh the application to detect latest changes
+		// Step 1: Refresh the application to fetch latest changes.
 		err := a.Refresh(appName)
 		if err != nil {
 			return err
 		}
 
-		// Poll the sync status after refresh
+		// Poll for differences.
 		isOutOfSync := false
 		for j := 0; j < maxRefreshPolls; j++ {
 			hasDiff, diffErr := a.HasDifferences(appName)
@@ -127,7 +127,7 @@ func (a API) Sync(appName string) error {
 			time.Sleep(refreshPollInterval)
 		}
 
-		// If there's no difference after polling, no need to sync
+		// If no differences, skip syncing.
 		if !isOutOfSync {
 			slog.Info("No differences found after polling", "appName", appName)
 			return nil
@@ -136,7 +136,7 @@ func (a API) Sync(appName string) error {
 		// Step 2: Sync the application
 		request := applicationpkg.ApplicationSyncRequest{
 			Name:  &appName,
-			Prune: true,
+			Prune: prune,
 		}
 
 		_, err = a.client.Sync(context.Background(), &request)
@@ -162,9 +162,9 @@ func (a API) Sync(appName string) error {
 	return fmt.Errorf("failed to sync app %s after %d attempts", appName, maxRetries)
 }
 
-// SyncWithLabels syncs applications based on provided labels.
-func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
-	// 1. Fetch applications based on labels
+// SyncWithLabels syncs applications based on provided labels with the prune option.
+func (a API) SyncWithLabels(labels string, prune bool) ([]*v1alpha1.Application, error) {
+	// 1. Fetch applications based on labels.
 	query := &applicationpkg.ApplicationQuery{
 		Selector: labels,
 	}
@@ -213,7 +213,7 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
 	for _, app := range listResponse.Items {
 		retries := 0
 		for retries < a.options.SyncRetries {
-			err := a.Sync(app.Name)
+			err := a.Sync(app.Name, prune)
 			if err != nil {
 				if isTransientError(err) {
 					// Handle transient errors with exponential backoff
@@ -270,7 +270,7 @@ func (a API) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
 	return syncedApps, nil
 }
 
-// Helper function to determine if an error is transient and should be retried
+// isTransientError determines if an error is transient.
 func isTransientError(err error) bool {
 	if err == nil {
 		return false
