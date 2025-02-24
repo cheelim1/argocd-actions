@@ -24,6 +24,7 @@ func Sync() *cobra.Command {
 			labels, _ := cmd.Flags().GetString("labels")
 			syncRetries, _ := cmd.Flags().GetInt("sync-retries")
 			syncInterval, _ := cmd.Flags().GetDuration("sync-interval")
+			prune, _ := cmd.Flags().GetBool("prune")
 
 			if syncRetries < 1 {
 				return fmt.Errorf("--sync-retries must be >= 1 (got %d)", syncRetries)
@@ -32,7 +33,7 @@ func Sync() *cobra.Command {
 				return fmt.Errorf("--sync-interval must be > 0 (got %v)", syncInterval)
 			}
 
-			// Validation logic
+			// Validation: either application or labels must be provided, but not both.
 			if (application == "" && labels == "") || (application != "" && labels != "") {
 				return errors.New("you must specify either 'application' or 'labels', but not both")
 			}
@@ -47,14 +48,14 @@ func Sync() *cobra.Command {
 			controller := ctrl.NewController(api)
 			log.Infof("Labels passed in: %s", labels)
 			if application != "" {
-				err := controller.Sync(application)
+				err := controller.Sync(application, prune)
 				if err != nil {
 					return err
 				}
 				log.Infof("Application %s synced", application)
 			} else if labels != "" {
-				log.Infof("To sync app %s based on labels %s", application, labels)
-				matchedApps, err := controller.SyncWithLabels(labels)
+				log.Infof("Syncing apps based on labels: %s", labels)
+				matchedApps, err := controller.SyncWithLabels(labels, prune)
 				if err != nil {
 					log.Errorf("Error: %s", err)
 					return err
@@ -73,5 +74,6 @@ func Sync() *cobra.Command {
 	cmd.Flags().String("labels", "", "Labels to sync the ArgoCD app with")
 	cmd.Flags().Int("sync-retries", 5, "Number of retry attempts if sync fails")
 	cmd.Flags().Duration("sync-interval", 10*time.Second, "Time to wait between retries (e.g. '5s', '1m')")
+	cmd.Flags().Bool("prune", false, "Enable prune during sync (default false)")
 	return cmd
 }

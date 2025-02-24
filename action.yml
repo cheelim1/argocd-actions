@@ -14,7 +14,7 @@ inputs:
   action:
     description: "Action name"
     required: true
-  application: #appName
+  application:
     description: "Application name to sync"
     required: false
   image:
@@ -32,6 +32,10 @@ inputs:
     description: "Duration to wait between retries (e.g. '10s', '1m')"
     required: false
     default: "10s"
+  prune:
+    description: "Enable prune during sync (default false)"
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -46,5 +50,6 @@ runs:
           --address=${{ inputs.address }} \
           --sync-retries=${{ inputs.sync_retries }} \
           --sync-interval=${{ inputs.sync_interval }} \
+          --prune=${{ inputs.prune }} \
           --logLevel=debug
       shell: sh

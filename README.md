@@ -5,7 +5,6 @@
 [![Test Status](https://github.com/cheelim1/argocd-actions/actions/workflows/code-check.yml/badge.svg)](https://github.com/cheelim1/argocd-actions/actions)
 
 
-
 This action can be used to sync ArgoCD applications using the application name or by labels.
 
 ## Usage
@@ -23,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Sync ArgoCD Application
-        uses: cheelim1/argocd-actions@v0.1.3
+        uses: cheelim1/argocd-actions@v0.1.4
         with:
           address: "argocd.example.com"
           token: ${{ secrets.ARGOCD_TOKEN }}
@@ -42,9 +41,10 @@ jobs:
 | `labels` | ArgoCD app to sync based on labels. [Optional] |
 | `sync_retries` | ArgoCD app to sync retries (Default 5). [Optional] |
 | `sync_interval` | ArgoCD app to sync retry interval (Default 10s). [Optional] |
+| `prune` | ArgoCD app to sync prune option (Default false). [Optional] |
 
 ### Note
-Have to either pass in application OR labels. Either 1 is required.
+Have to either pass in application or labels. Required to pass in either by the application name or by labels.
 
 ## Examples
 
@@ -61,7 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Sync ArgoCD Application
-        uses: cheelim1/argocd-actions@v0.1.3
+        uses: cheelim1/argocd-actions@v0.1.4
         with:
           address: "argocd.example.com"
           token: ${{ secrets.ARGOCD_TOKEN }}
@@ -69,6 +69,7 @@ jobs:
           application: "my-example-app"
           sync_retries: "3" # Optional if you want to tweak the number of retries
           sync_interval: "5s" # Optional if you want to tweak the retry sync interval
+          prune: "true" # Optional if you want to sync with prune enabled, defaults to "false".
 ```
 
 ### Example syncing with labels
@@ -81,12 +82,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Sync ArgoCD Application
-        uses: cheelim1/argocd-actions@v0.1.3
+        uses: cheelim1/argocd-actions@v0.1.4
         with:
           address: "argocd.example.com"
           token: ${{ secrets.ARGOCD_TOKEN }}
           action: sync
           labels: "env=production,team=myteam" # Replace with your ArgoCD App label key-value pairs.
+          sync_retries: "3" # Optional if you want to tweak the number of retries
+          sync_interval: "5s" # Optional if you want to tweak the retry sync interval
+          prune: "true" # Optional if you want to sync with prune enabled, defaults to "false".
 ```
 
 ## Publishing 

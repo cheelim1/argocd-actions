@@ -8,22 +8,22 @@ import (
 // Action is action type.
 type Action int
 
-// Controller is main struct of Vault.
+// Controller is the main struct.
 type Controller struct {
 	API argocd.Interface
 }
 
-// NewController is a factory to create a Controller.
+// NewController creates a new Controller.
 func NewController(api argocd.Interface) *Controller {
 	return &Controller{API: api}
 }
 
-// Sync syncs given application.
-func (c Controller) Sync(appName string) error {
-	return c.API.Sync(appName)
+// Sync syncs the given application with the optional prune flag.
+func (c Controller) Sync(appName string, prune bool) error {
+	return c.API.Sync(appName, prune)
 }
 
-// SyncWithLabels syncs apps based on provided labels.
-func (c Controller) SyncWithLabels(labels string) ([]*v1alpha1.Application, error) {
-	return c.API.SyncWithLabels(labels)
+// SyncWithLabels syncs applications based on provided labels with the prune option.
+func (c Controller) SyncWithLabels(labels string, prune bool) ([]*v1alpha1.Application, error) {
+	return c.API.SyncWithLabels(labels, prune)
 }
