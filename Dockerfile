@@ -25,9 +25,7 @@ FROM ${FROM_IMAGE}
 
 COPY --from=builder /app/dist/argocd-actions /bin/argocd-actions
 
-# Install AWS CLI
-RUN apk update && \
-  apk add --no-cache python3 py3-pip && \
-  pip install awscli
+# Install AWS CLI (native Alpine package)
+RUN apk add --no-cache aws-cli
 
 ENTRYPOINT ["argocd-actions"]
