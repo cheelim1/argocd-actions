@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Sync ArgoCD Application
-        uses: cheelim1/argocd-actions@v0.1.4
+        uses: cheelim1/argocd-actions@v0.1.5
         with:
           address: "argocd.example.com"
           token: ${{ secrets.ARGOCD_TOKEN }}
@@ -42,6 +42,7 @@ jobs:
 | `sync_retries` | ArgoCD app to sync retries (Default 5). [Optional] |
 | `sync_interval` | ArgoCD app to sync retry interval (Default 10s). [Optional] |
 | `prune` | ArgoCD app to sync prune option (Default false). [Optional] |
+| `server-side-apply` | Enable server-side apply during sync (Default false). [Optional] |
 
 ### Note
 Have to either pass in application or labels. Required to pass in either by the application name or by labels.
@@ -61,7 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Sync ArgoCD Application
-        uses: cheelim1/argocd-actions@v0.1.4
+        uses: cheelim1/argocd-actions@v0.1.5
         with:
           address: "argocd.example.com"
           token: ${{ secrets.ARGOCD_TOKEN }}
@@ -70,6 +71,7 @@ jobs:
           sync_retries: "3" # Optional if you want to tweak the number of retries
           sync_interval: "5s" # Optional if you want to tweak the retry sync interval
           prune: "true" # Optional if you want to sync with prune enabled, defaults to "false".
+          server-side-apply: "true" # Enable server-side apply for better conflict resolution
 ```
 
 ### Example syncing with labels
@@ -82,7 +84,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Sync ArgoCD Application
-        uses: cheelim1/argocd-actions@v0.1.4
+        uses: cheelim1/argocd-actions@v0.1.5
         with:
           address: "argocd.example.com"
           token: ${{ secrets.ARGOCD_TOKEN }}
@@ -91,6 +93,7 @@ jobs:
           sync_retries: "3" # Optional if you want to tweak the number of retries
           sync_interval: "5s" # Optional if you want to tweak the retry sync interval
           prune: "true" # Optional if you want to sync with prune enabled, defaults to "false".
+          server-side-apply: "true" # Enable server-side apply for better conflict resolution
 ```
 
 ## Publishing 

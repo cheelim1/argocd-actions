@@ -36,6 +36,10 @@ inputs:
     description: "Enable prune during sync (default false)"
     required: false
     default: "false"
+  server-side-apply:
+    description: "Enable server-side apply during sync (default false)"
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -51,5 +55,6 @@ runs:
           --sync-retries=${{ inputs.sync_retries }} \
           --sync-interval=${{ inputs.sync_interval }} \
           --prune=${{ inputs.prune }} \
+          --server-side-apply=${{ inputs.server-side-apply }} \
           --logLevel=debug
       shell: sh

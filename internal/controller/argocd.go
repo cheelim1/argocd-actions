@@ -18,12 +18,12 @@ func NewController(api argocd.Interface) *Controller {
 	return &Controller{API: api}
 }
 
-// Sync syncs the given application with the optional prune flag.
-func (c Controller) Sync(appName string, prune bool) error {
-	return c.API.Sync(appName, prune)
+// Sync syncs the given application with optional prune and server-side apply flags.
+func (c Controller) Sync(appName string, prune bool, serverSideApply bool) error {
+	return c.API.Sync(appName, prune, serverSideApply)
 }
 
-// SyncWithLabels syncs applications based on provided labels with the prune option.
-func (c Controller) SyncWithLabels(labels string, prune bool) ([]*v1alpha1.Application, error) {
-	return c.API.SyncWithLabels(labels, prune)
+// SyncWithLabels syncs applications based on provided labels with prune and server-side apply options.
+func (c Controller) SyncWithLabels(labels string, prune bool, serverSideApply bool) ([]*v1alpha1.Application, error) {
+	return c.API.SyncWithLabels(labels, prune, serverSideApply)
 }
