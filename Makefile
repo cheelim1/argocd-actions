@@ -27,7 +27,7 @@ lint:
 	golangci-lint run
 
 	# Statuscheck
-	go install honnef.co/go/tools/cmd/staticcheck@2022.1
+	go install honnef.co/go/tools/cmd/staticcheck@latest
 	staticcheck ./...
 
 .PHONY: test
