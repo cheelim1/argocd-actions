@@ -1,6 +1,6 @@
 module github.com/cheelim1/argocd-actions
 
-go 1.21
+go 1.24
 
 require (
 	github.com/argoproj/argo-cd/v2 v2.0.0

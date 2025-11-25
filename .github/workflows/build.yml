@@ -78,9 +78,9 @@ jobs:
         run: |
           VERSION=$(echo $GITHUB_REF | cut -d / -f 3)
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.24'
       - name: Get OS and arch info
         run: |
           GOOSARCH=${{matrix.goosarch}}
@@ -111,4 +111,4 @@ jobs:
       #     draft: false
       #     files: ${{env.BINARY_NAME}}
       #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
