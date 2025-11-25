@@ -25,6 +25,7 @@ func Sync() *cobra.Command {
 			syncRetries, _ := cmd.Flags().GetInt("sync-retries")
 			syncInterval, _ := cmd.Flags().GetDuration("sync-interval")
 			prune, _ := cmd.Flags().GetBool("prune")
+			serverSideApply, _ := cmd.Flags().GetBool("server-side-apply")
 
 			if syncRetries < 1 {
 				return fmt.Errorf("--sync-retries must be >= 1 (got %d)", syncRetries)
@@ -39,30 +40,41 @@ func Sync() *cobra.Command {
 			}
 
 			api := argocd.NewAPI(&argocd.APIOptions{
-				Address:      address,
-				Token:        token,
-				SyncRetries:  syncRetries,
-				SyncInterval: syncInterval,
+				Address:         address,
+				Token:           token,
+				SyncRetries:     syncRetries,
+				SyncInterval:    syncInterval,
+				ServerSideApply: serverSideApply,
 			})
 
 			controller := ctrl.NewController(api)
 			log.Infof("Labels passed in: %s", labels)
+			
 			if application != "" {
-				err := controller.Sync(application, prune)
+				err := controller.Sync(application, prune, serverSideApply)
 				if err != nil {
 					return err
 				}
-				log.Infof("Application %s synced", application)
+				if serverSideApply {
+					log.Infof("Application %s synced with server-side apply", application)
+				} else {
+					log.Infof("Application %s synced", application)
+				}
 			} else if labels != "" {
 				log.Infof("Syncing apps based on labels: %s", labels)
-				matchedApps, err := controller.SyncWithLabels(labels, prune)
+				matchedApps, err := controller.SyncWithLabels(labels, prune, serverSideApply)
+				
 				if err != nil {
 					log.Errorf("Error: %s", err)
 					return err
 				}
 
 				for _, app := range matchedApps {
-					log.Infof("Application %s synced using labels", app.Name)
+					if serverSideApply {
+						log.Infof("Application %s synced using labels with server-side apply", app.Name)
+					} else {
+						log.Infof("Application %s synced using labels", app.Name)
+					}
 				}
 			}
 
@@ -75,5 +87,6 @@ func Sync() *cobra.Command {
 	cmd.Flags().Int("sync-retries", 5, "Number of retry attempts if sync fails")
 	cmd.Flags().Duration("sync-interval", 10*time.Second, "Time to wait between retries (e.g. '5s', '1m')")
 	cmd.Flags().Bool("prune", false, "Enable prune during sync (default false)")
+	cmd.Flags().Bool("server-side-apply", false, "Enable server-side apply during sync (default false)")
 	return cmd
 }

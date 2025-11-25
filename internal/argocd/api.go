@@ -25,8 +25,8 @@ const (
 
 // Interface is an interface for API.
 type Interface interface {
-	Sync(appName string, prune bool) error
-	SyncWithLabels(labels string, prune bool) ([]*v1alpha1.Application, error)
+	Sync(appName string, prune bool, serverSideApply bool) error
+	SyncWithLabels(labels string, prune bool, serverSideApply bool) ([]*v1alpha1.Application, error)
 }
 
 // API represents the ArgoCD API.
@@ -38,10 +38,11 @@ type API struct {
 
 // APIOptions holds API configuration options.
 type APIOptions struct {
-	Address      string
-	Token        string
-	SyncRetries  int
-	SyncInterval time.Duration
+	Address         string
+	Token           string
+	SyncRetries     int
+	SyncInterval    time.Duration
+	ServerSideApply bool
 }
 
 // NewAPI creates a new API instance.
@@ -100,8 +101,8 @@ func (a API) GetApplicationWithRetry(appName string, refreshType string) (*v1alp
 	return nil, fmt.Errorf("failed to fetch application %s after %d attempts", appName, appQueryMaxRetries)
 }
 
-// Sync syncs the given application with an optional prune flag.
-func (a API) Sync(appName string, prune bool) error {
+// Sync syncs the given application with optional prune and server-side apply flags.
+func (a API) Sync(appName string, prune bool, serverSideApply bool) error {
 	maxRetries := a.options.SyncRetries
 	refreshPollInterval := 5 * time.Second // Interval to check sync status after refresh
 	maxRefreshPolls := 10                  // Maximum number of times to poll sync status after refresh, 12 polls at 5-second intervals = 60 seconds
@@ -133,10 +134,18 @@ func (a API) Sync(appName string, prune bool) error {
 			return nil
 		}
 
-		// Step 2: Sync the application
+		// Step 2: Sync the application with server-side apply support
 		request := applicationpkg.ApplicationSyncRequest{
 			Name:  &appName,
 			Prune: prune,
+		}
+
+		// Add server-side apply sync option if enabled
+		if serverSideApply {
+			request.SyncOptions = &applicationpkg.SyncOptions{
+				Items: []string{"ServerSideApply=true"},
+			}
+			slog.Info("Syncing with server-side apply enabled", "appName", appName)
 		}
 
 		_, err = a.client.Sync(context.Background(), &request)
@@ -148,6 +157,7 @@ func (a API) Sync(appName string, prune bool) error {
 				"attempt", i+1,
 				"maxRetries", maxRetries,
 				"retryIn", a.options.SyncInterval,
+				"serverSideApply", serverSideApply,
 				"error", err,
 			)
 			time.Sleep(a.options.SyncInterval)
@@ -155,15 +165,15 @@ func (a API) Sync(appName string, prune bool) error {
 		}
 
 		// If the sync was successful, break out of the loop
-		slog.Info("Successfully synced app", "appName", appName)
+		slog.Info("Successfully synced app", "appName", appName, "serverSideApply", serverSideApply)
 		return nil
 	}
 
 	return fmt.Errorf("failed to sync app %s after %d attempts", appName, maxRetries)
 }
 
-// SyncWithLabels syncs applications based on provided labels with the prune option.
-func (a API) SyncWithLabels(labels string, prune bool) ([]*v1alpha1.Application, error) {
+// SyncWithLabels syncs applications based on provided labels with prune and server-side apply options.
+func (a API) SyncWithLabels(labels string, prune bool, serverSideApply bool) ([]*v1alpha1.Application, error) {
 	// 1. Fetch applications based on labels.
 	query := &applicationpkg.ApplicationQuery{
 		Selector: labels,
@@ -209,11 +219,11 @@ func (a API) SyncWithLabels(labels string, prune bool) ([]*v1alpha1.Application,
 	var syncedApps []*v1alpha1.Application
 	var syncErrors []string
 
-	// 2. Sync each application
+	// 2. Sync each application with server-side apply support
 	for _, app := range listResponse.Items {
 		retries := 0
 		for retries < a.options.SyncRetries {
-			err := a.Sync(app.Name, prune)
+			err := a.Sync(app.Name, prune, serverSideApply)
 			if err != nil {
 				if isTransientError(err) {
 					// Handle transient errors with exponential backoff
@@ -222,6 +232,7 @@ func (a API) SyncWithLabels(labels string, prune bool) ([]*v1alpha1.Application,
 						"appName", app.Name,
 						"attempt", retries+1,
 						"backoff", backoff,
+						"serverSideApply", serverSideApply,
 						"error", err,
 					)
 					time.Sleep(backoff)
@@ -243,7 +254,7 @@ func (a API) SyncWithLabels(labels string, prune bool) ([]*v1alpha1.Application,
 			}
 
 			if !hasDiff {
-				slog.Info("Synced app via labels", "appName", app.Name, "labels", labels)
+				slog.Info("Synced app via labels", "appName", app.Name, "labels", labels, "serverSideApply", serverSideApply)
 				syncedApps = append(syncedApps, &app)
 				break
 			} else {
@@ -252,6 +263,7 @@ func (a API) SyncWithLabels(labels string, prune bool) ([]*v1alpha1.Application,
 					"attempt", retries+1,
 					"max", a.options.SyncRetries,
 					"retryIn", a.options.SyncInterval,
+					"serverSideApply", serverSideApply,
 				)
 				retries++
 				time.Sleep(a.options.SyncInterval) // Wait before retrying
